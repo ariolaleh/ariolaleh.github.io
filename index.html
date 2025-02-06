@@ -3,36 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test</title>
+    <title>Centered Text</title>
     <style>
-        body {
-            background-color: lightblue;
+        /* Center text horizontally and vertically */
+        body, html {
+            height: 100%;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
             text-align: center;
-            font-family: Calibri, sans-serif;
-        }
-        button {
-            background-color: light blue;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            font-size: 18px;
-            cursor: pointer;
-        }
-        button:hover {
-            background-color: navy;
         }
     </style>
 </head>
 <body>
-    <h1>Experiment because yes</h1>
-    <p id="message">What else do I put here?.</p>
-    <button onclick="changeText()">Button</button>
-
-    <script>
-        function changeText() {
-            document.getElementById("message").innerText = "Nice";
-        }
-    </script>
+    <h1>don't mind me just testing some easy features out</h1>
+    <p>yay I managed to center this text</p>
 </body>
 </html>
