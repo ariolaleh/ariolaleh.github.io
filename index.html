@@ -1,25 +1,484 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Work In Progress</title>
-    <style>
-        /* Center text horizontally and vertically */
-        body, html {
-            height: 100%;
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-        }
+import React, { useState, useEffect, useCallback } from 'react';
 
-         h1 { margin-bottom: 20px; /* Adds space below the h1 */ }
-    </style>
-</head>
-<body>
-    <h1>Site under construction</h1>
-    <p>Estimated completion: March 2025</p>
-</body>
-</html>
+const OreMiningGame = () => {
+  const [gameState, setGameState] = useState({
+    money: 0,
+    inventory: {},
+    pickaxe: 'basic',
+    luckBoost: 0,
+    luckBoostEnd: 0,
+    spawnSpeedBoost: 0,
+    spawnSpeedBoostEnd: 0,
+    autoCollector: false,
+    autoCollectorSpeed: 10000,
+    moonUnlocked: false,
+    currentArea: 'earth'
+  });
+
+  const [ores, setOres] = useState([]);
+  const [chests, setChests] = useState([]);
+  const [nextOreId, setNextOreId] = useState(0);
+  const [notification, setNotification] = useState('');
+
+  const earthOres = {
+    coal: { name: 'Coal', color: '#2c2c2c', rarity: 0.35, value: 1, minPickaxe: 'basic', symbol: '⬛' },
+    copper: { name: 'Copper', color: '#b87333', rarity: 0.25, value: 3, minPickaxe: 'basic', symbol: '🟫' },
+    iron: { name: 'Iron', color: '#8c8c8c', rarity: 0.15, value: 8, minPickaxe: 'basic', symbol: '⬜' },
+    silver: { name: 'Silver', color: '#c0c0c0', rarity: 0.08, value: 20, minPickaxe: 'iron', symbol: '💎' },
+    gold: { name: 'Gold', color: '#ffd700', rarity: 0.06, value: 50, minPickaxe: 'iron', symbol: '🟨' },
+    emerald: { name: 'Emerald', color: '#50c878', rarity: 0.04, value: 120, minPickaxe: 'steel', symbol: '💚' },
+    ruby: { name: 'Ruby', color: '#e0115f', rarity: 0.03, value: 150, minPickaxe: 'steel', symbol: '❤️' },
+    diamond: { name: 'Diamond', color: '#b9f2ff', rarity: 0.02, value: 300, minPickaxe: 'steel', symbol: '💎' },
+    sapphire: { name: 'Sapphire', color: '#0f52ba', rarity: 0.015, value: 400, minPickaxe: 'diamond', symbol: '💙' },
+    jade: { name: 'Jade', color: '#00a86b', rarity: 0.008, value: 800, minPickaxe: 'diamond', symbol: '💚' },
+    key: { name: 'Key', color: '#ffd700', rarity: 0.005, value: 0, minPickaxe: 'basic', symbol: '🗝️' }
+  };
+
+  const moonOres = {
+    moonrock: { name: 'Moon Rock', color: '#d3d3d3', rarity: 0.4, value: 100, minPickaxe: 'basic', symbol: '🌑' },
+    stardust: { name: 'Stardust', color: '#e6e6fa', rarity: 0.25, value: 250, minPickaxe: 'iron', symbol: '✨' },
+    meteorite: { name: 'Meteorite', color: '#4a4a4a', rarity: 0.15, value: 500, minPickaxe: 'steel', symbol: '☄️' },
+    cosmicgem: { name: 'Cosmic Gem', color: '#9400d3', rarity: 0.08, value: 1000, minPickaxe: 'diamond', symbol: '🔮' },
+    voidcrystal: { name: 'Void Crystal', color: '#191970', rarity: 0.05, value: 2000, minPickaxe: 'diamond', symbol: '🌌' },
+    nebulite: { name: 'Nebulite', color: '#ff1493', rarity: 0.03, value: 3500, minPickaxe: 'diamond', symbol: '🌠' },
+    quantumore: { name: 'Quantum Ore', color: '#00ffff', rarity: 0.015, value: 5000, minPickaxe: 'diamond', symbol: '⚛️' },
+    key: { name: 'Key', color: '#ffd700', rarity: 0.005, value: 0, minPickaxe: 'basic', symbol: '🗝️' }
+  };
+
+  const currentOres = gameState.currentArea === 'earth' ? earthOres : moonOres;
+
+  const pickaxes = {
+    basic: { name: 'Basic Pickaxe', cost: 0, owned: true },
+    iron: { name: 'Iron Pickaxe', cost: 100, owned: false },
+    steel: { name: 'Steel Pickaxe', cost: 500, owned: false },
+    diamond: { name: 'Diamond Pickaxe', cost: 2000, owned: false }
+  };
+
+  const boosts = {
+    luck1: { name: 'Luck Boost I (+10%)', cost: 50, boost: 0.1 },
+    luck2: { name: 'Luck Boost II (+20%)', cost: 200, boost: 0.2 },
+    luck3: { name: 'Luck Boost III (+35%)', cost: 800, boost: 0.35 }
+  };
+
+  const showNotification = (message) => {
+    setNotification(message);
+    setTimeout(() => setNotification(''), 3000);
+  };
+
+  const spawnOre = useCallback(() => {
+    if (ores.length >= 50) return;
+    
+    const currentLuck = Date.now() < gameState.luckBoostEnd ? gameState.luckBoost : 0;
+    const random = Math.random() * (1 + currentLuck);
+    let cumulativeRarity = 0;
+    
+    for (const [type, ore] of Object.entries(currentOres)) {
+      cumulativeRarity += ore.rarity;
+      if (random <= cumulativeRarity) {
+        const newOre = {
+          id: nextOreId,
+          type,
+          x: Math.random() * 320,
+          y: Math.random() * 350 + 50
+        };
+        setOres(prev => [...prev, newOre]);
+        setNextOreId(prev => prev + 1);
+        break;
+      }
+    }
+  }, [gameState.luckBoost, gameState.luckBoostEnd, nextOreId, ores.length, currentOres]);
+
+  const spawnChest = useCallback(() => {
+    if (chests.length >= 5 || Math.random() > 0.1) return;
+    
+    const newChest = {
+      id: Date.now(),
+      x: Math.random() * 50 + 350,
+      y: Math.random() * 100 + 450
+    };
+    setChests(prev => [...prev, newChest]);
+  }, [chests.length]);
+
+  useEffect(() => {
+    const currentSpeed = Date.now() < gameState.spawnSpeedBoostEnd ? 1000 : 2000;
+    const interval = setInterval(() => {
+      spawnOre();
+      spawnChest();
+    }, currentSpeed);
+    return () => clearInterval(interval);
+  }, [spawnOre, spawnChest, gameState.spawnSpeedBoostEnd]);
+
+  useEffect(() => {
+    if (!gameState.autoCollector) return;
+    
+    const interval = setInterval(() => {
+      setOres(prev => {
+        if (prev.length === 0) return prev;
+        const oreToCollect = prev.find(ore => canMineOre(ore.type));
+        if (oreToCollect) {
+          mineOre(oreToCollect.id, oreToCollect.type, true);
+        }
+        return prev;
+      });
+    }, gameState.autoCollectorSpeed);
+    return () => clearInterval(interval);
+  }, [gameState.autoCollector, gameState.autoCollectorSpeed]);
+
+  const canMineOre = (oreType) => {
+    const ore = currentOres[oreType];
+    const pickaxeOrder = ['basic', 'iron', 'steel', 'diamond'];
+    const currentPickaxeIndex = pickaxeOrder.indexOf(gameState.pickaxe);
+    const requiredPickaxeIndex = pickaxeOrder.indexOf(ore.minPickaxe);
+    return currentPickaxeIndex >= requiredPickaxeIndex;
+  };
+
+  const mineOre = (oreId, oreType, isAuto = false) => {
+    if (!canMineOre(oreType)) {
+      if (!isAuto) {
+        const requiredPickaxe = currentOres[oreType].minPickaxe;
+        showNotification(`Need ${pickaxes[requiredPickaxe].name} to mine ${currentOres[oreType].name}!`);
+      }
+      return;
+    }
+    
+    setOres(prev => prev.filter(ore => ore.id !== oreId));
+    setGameState(prev => ({
+      ...prev,
+      inventory: {
+        ...prev.inventory,
+        [oreType]: (prev.inventory[oreType] || 0) + 1
+      }
+    }));
+  };
+
+  const openChest = (chestId) => {
+    const keys = gameState.inventory.key || 0;
+    if (keys === 0) {
+      showNotification('Need a key to open chest!');
+      return;
+    }
+    
+    setChests(prev => prev.filter(chest => chest.id !== chestId));
+    
+    const rewards = [
+      () => {
+        const cash = Math.floor(Math.random() * 180) + 20;
+        setGameState(prev => ({ ...prev, money: prev.money + cash }));
+        showNotification(`Found $${cash}!`);
+      },
+      () => {
+        const duration = (Math.floor(Math.random() * 4) + 1) * 60000;
+        const boost = (Math.floor(Math.random() * 4) + 1) * 0.1;
+        setGameState(prev => ({
+          ...prev,
+          luckBoost: boost,
+          luckBoostEnd: Date.now() + duration
+        }));
+        showNotification(`Luck boost: +${(boost * 100).toFixed(0)}% for ${duration / 60000}min!`);
+      },
+      () => {
+        const duration = (Math.floor(Math.random() * 4) + 1) * 60000;
+        const boost = (Math.floor(Math.random() * 4) + 1) * 0.1;
+        setGameState(prev => ({
+          ...prev,
+          spawnSpeedBoost: boost,
+          spawnSpeedBoostEnd: Date.now() + duration
+        }));
+        showNotification(`Spawn speed boost: +${(boost * 100).toFixed(0)}% for ${duration / 60000}min!`);
+      }
+    ];
+    
+    rewards[Math.floor(Math.random() * rewards.length)]();
+    
+    setGameState(prev => ({
+      ...prev,
+      inventory: { ...prev.inventory, key: keys - 1 }
+    }));
+  };
+
+  const sellOre = (oreType) => {
+    const quantity = gameState.inventory[oreType] || 0;
+    if (quantity === 0 || oreType === 'key') return;
+    
+    const value = currentOres[oreType].value * quantity;
+    setGameState(prev => ({
+      ...prev,
+      money: prev.money + value,
+      inventory: {
+        ...prev.inventory,
+        [oreType]: 0
+      }
+    }));
+  };
+
+  const buyPickaxe = (pickaxeType) => {
+    const pickaxe = pickaxes[pickaxeType];
+    if (gameState.money < pickaxe.cost || pickaxe.owned) return;
+    
+    setGameState(prev => ({
+      ...prev,
+      money: prev.money - pickaxe.cost,
+      pickaxe: pickaxeType
+    }));
+    pickaxes[pickaxeType].owned = true;
+  };
+
+  const buyBoost = (boostType) => {
+    const boost = boosts[boostType];
+    if (gameState.money < boost.cost) return;
+    
+    setGameState(prev => ({
+      ...prev,
+      money: prev.money - boost.cost,
+      luckBoost: boost.boost,
+      luckBoostEnd: Date.now() + 300000
+    }));
+  };
+
+  const buyAutoCollector = () => {
+    if (gameState.money < 1000 || gameState.autoCollector) return;
+    setGameState(prev => ({
+      ...prev,
+      money: prev.money - 1000,
+      autoCollector: true
+    }));
+  };
+
+  const upgradeAutoCollector = () => {
+    if (gameState.money < 2000 || gameState.autoCollectorSpeed <= 1000) return;
+    setGameState(prev => ({
+      ...prev,
+      money: prev.money - 2000,
+      autoCollectorSpeed: Math.max(1000, prev.autoCollectorSpeed - 1000)
+    }));
+  };
+
+  const unlockMoon = () => {
+    if (gameState.money < 5000 || gameState.moonUnlocked) return;
+    setGameState(prev => ({
+      ...prev,
+      money: prev.money - 5000,
+      moonUnlocked: true
+    }));
+    showNotification('Moon area unlocked!');
+  };
+
+  const switchArea = (area) => {
+    setGameState(prev => ({ ...prev, currentArea: area }));
+    setOres([]);
+    setChests([]);
+  };
+
+  return (
+    <div className="flex h-screen bg-gray-900 text-white">
+      {/* Mining Area */}
+      <div className="w-1/2 bg-gradient-to-b from-gray-800 to-gray-900 relative border-r-2 border-gray-600">
+        <div className="flex justify-between items-center p-4 bg-gray-700">
+          <h2 className="text-2xl font-bold">{gameState.currentArea === 'earth' ? '🌍 Earth' : '🌙 Moon'} Mining</h2>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => switchArea('earth')}
+              className={`px-3 py-1 rounded ${gameState.currentArea === 'earth' ? 'bg-blue-600' : 'bg-gray-600'}`}
+            >
+              🌍 Earth
+            </button>
+            {gameState.moonUnlocked && (
+              <button
+                onClick={() => switchArea('moon')}
+                className={`px-3 py-1 rounded ${gameState.currentArea === 'moon' ? 'bg-purple-600' : 'bg-gray-600'}`}
+              >
+                🌙 Moon
+              </button>
+            )}
+          </div>
+        </div>
+        
+        <div className="relative h-full overflow-hidden" style={{
+          background: gameState.currentArea === 'earth' 
+            ? 'linear-gradient(to bottom, #87ceeb 0%, #8fbc8f 40%, #8b4513 100%)'
+            : 'linear-gradient(to bottom, #000000 0%, #191970 50%, #2f2f2f 100%)'
+        }}>
+          {/* Stars for moon */}
+          {gameState.currentArea === 'moon' && (
+            <div className="absolute inset-0">
+              {[...Array(20)].map((_, i) => (
+                <div
+                  key={i}
+                  className="absolute text-white text-xs"
+                  style={{
+                    left: `${Math.random() * 100}%`,
+                    top: `${Math.random() * 50}%`
+                  }}
+                >
+                  ⭐
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {ores.map(ore => (
+            <div
+              key={ore.id}
+              className={`absolute w-10 h-10 flex items-center justify-center cursor-pointer transform hover:scale-110 transition-transform text-2xl ${
+                canMineOre(ore.type) ? '' : 'opacity-50 cursor-not-allowed'
+              }`}
+              style={{
+                left: `${ore.x}px`,
+                top: `${ore.y}px`,
+                filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.5))'
+              }}
+              onClick={() => mineOre(ore.id, ore.type)}
+              title={`${currentOres[ore.type].name}${!canMineOre(ore.type) ? ' (Need better pickaxe!)' : ''}`}
+            >
+              {currentOres[ore.type].symbol}
+            </div>
+          ))}
+          
+          {chests.map(chest => (
+            <div
+              key={chest.id}
+              className="absolute w-12 h-12 flex items-center justify-center cursor-pointer transform hover:scale-110 transition-transform text-3xl"
+              style={{
+                left: `${chest.x}px`,
+                top: `${chest.y}px`,
+                filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.5))'
+              }}
+              onClick={() => openChest(chest.id)}
+              title="Treasure Chest (Requires Key)"
+            >
+              📦
+            </div>
+          ))}
+        </div>
+        
+        <div className="absolute bottom-4 left-4 bg-gray-700 p-3 rounded">
+          <div className="text-lg font-semibold">🔨 {pickaxes[gameState.pickaxe].name}</div>
+          <div className="text-sm text-gray-300">💰 ${gameState.money}</div>
+          <div className="text-sm text-gray-300">📦 Ores: {ores.length}/50</div>
+          {Date.now() < gameState.luckBoostEnd && (
+            <div className="text-sm text-green-400">🍀 Luck: +{(gameState.luckBoost * 100).toFixed(0)}%</div>
+          )}
+          {Date.now() < gameState.spawnSpeedBoostEnd && (
+            <div className="text-sm text-blue-400">⚡ Speed Boost Active</div>
+          )}
+          {gameState.autoCollector && (
+            <div className="text-sm text-purple-400">🤖 Auto: {gameState.autoCollectorSpeed/1000}s</div>
+          )}
+        </div>
+        
+        {notification && (
+          <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-yellow-600 text-black px-4 py-2 rounded font-bold z-10">
+            {notification}
+          </div>
+        )}
+      </div>
+
+      {/* Market & Shop */}
+      <div className="w-1/2 bg-gray-800">
+        <div className="h-1/2 border-b-2 border-gray-600">
+          <h2 className="text-2xl font-bold p-4 bg-gray-700">💰 Sell Ores</h2>
+          <div className="p-4 space-y-2 overflow-y-auto max-h-80">
+            {Object.entries(currentOres).map(([type, ore]) => {
+              if (type === 'key') return null;
+              const quantity = gameState.inventory[type] || 0;
+              return (
+                <div key={type} className="flex justify-between items-center bg-gray-700 p-3 rounded">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-xl">{ore.symbol}</span>
+                    <span>{ore.name} x{quantity}</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <span className="text-green-400">${ore.value} each</span>
+                    <button
+                      onClick={() => sellOre(type)}
+                      disabled={quantity === 0}
+                      className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 px-3 py-1 rounded text-sm"
+                    >
+                      Sell All (${ore.value * quantity})
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="bg-gray-700 p-3 rounded">
+              <div className="flex items-center space-x-3">
+                <span className="text-xl">🗝️</span>
+                <span>Keys: {gameState.inventory.key || 0}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="h-1/2">
+          <h2 className="text-2xl font-bold p-4 bg-gray-700">🛒 Shop</h2>
+          <div className="p-4 space-y-3 overflow-y-auto max-h-80">
+            <div className="text-lg font-semibold text-blue-400">🔨 Pickaxes</div>
+            {Object.entries(pickaxes).map(([type, pickaxe]) => (
+              <div key={type} className="flex justify-between items-center bg-gray-700 p-3 rounded">
+                <span className={pickaxe.owned ? 'text-green-400' : ''}>{pickaxe.name}</span>
+                <button
+                  onClick={() => buyPickaxe(type)}
+                  disabled={gameState.money < pickaxe.cost || pickaxe.owned}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 px-3 py-1 rounded text-sm"
+                >
+                  {pickaxe.owned ? 'Owned' : `$${pickaxe.cost}`}
+                </button>
+              </div>
+            ))}
+            
+            <div className="text-lg font-semibold text-purple-400 mt-4">🚀 Upgrades</div>
+            <div className="flex justify-between items-center bg-gray-700 p-3 rounded">
+              <span className={gameState.autoCollector ? 'text-green-400' : ''}>🤖 Auto Collector</span>
+              <button
+                onClick={buyAutoCollector}
+                disabled={gameState.money < 1000 || gameState.autoCollector}
+                className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 px-3 py-1 rounded text-sm"
+              >
+                {gameState.autoCollector ? 'Owned' : '$1000'}
+              </button>
+            </div>
+            {gameState.autoCollector && gameState.autoCollectorSpeed > 1000 && (
+              <div className="flex justify-between items-center bg-gray-700 p-3 rounded">
+                <span>⚡ Upgrade Auto Collector</span>
+                <button
+                  onClick={upgradeAutoCollector}
+                  disabled={gameState.money < 2000}
+                  className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 px-3 py-1 rounded text-sm"
+                >
+                  $2000
+                </button>
+              </div>
+            )}
+            {!gameState.moonUnlocked && (
+              <div className="flex justify-between items-center bg-gray-700 p-3 rounded">
+                <span>🌙 Unlock Moon Area</span>
+                <button
+                  onClick={unlockMoon}
+                  disabled={gameState.money < 5000}
+                  className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 px-3 py-1 rounded text-sm"
+                >
+                  $5000
+                </button>
+              </div>
+            )}
+            
+            {Object.entries(boosts).map(([type, boost]) => (
+              <div key={type} className="flex justify-between items-center bg-gray-700 p-3 rounded">
+                <span>🍀 {boost.name} (5min)</span>
+                <button
+                  onClick={() => buyBoost(type)}
+                  disabled={gameState.money < boost.cost}
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 px-3 py-1 rounded text-sm"
+                >
+                  ${boost.cost}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default OreMiningGame;
