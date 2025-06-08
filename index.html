@@ -1,486 +1,871 @@
 <!DOCTYPE html>
-
-import React, { useState, useEffect, useCallback } from 'react';
-
-const OreMiningGame = () => {
-  const [gameState, setGameState] = useState({
-    money: 0,
-    inventory: {},
-    pickaxe: 'basic',
-    luckBoost: 0,
-    luckBoostEnd: 0,
-    spawnSpeedBoost: 0,
-    spawnSpeedBoostEnd: 0,
-    autoCollector: false,
-    autoCollectorSpeed: 10000,
-    moonUnlocked: false,
-    currentArea: 'earth'
-  });
-
-  const [ores, setOres] = useState([]);
-  const [chests, setChests] = useState([]);
-  const [nextOreId, setNextOreId] = useState(0);
-  const [notification, setNotification] = useState('');
-
-  const earthOres = {
-    coal: { name: 'Coal', color: '#2c2c2c', rarity: 0.35, value: 1, minPickaxe: 'basic', symbol: '⬛' },
-    copper: { name: 'Copper', color: '#b87333', rarity: 0.25, value: 3, minPickaxe: 'basic', symbol: '🟫' },
-    iron: { name: 'Iron', color: '#8c8c8c', rarity: 0.15, value: 8, minPickaxe: 'basic', symbol: '⬜' },
-    silver: { name: 'Silver', color: '#c0c0c0', rarity: 0.08, value: 20, minPickaxe: 'iron', symbol: '💎' },
-    gold: { name: 'Gold', color: '#ffd700', rarity: 0.06, value: 50, minPickaxe: 'iron', symbol: '🟨' },
-    emerald: { name: 'Emerald', color: '#50c878', rarity: 0.04, value: 120, minPickaxe: 'steel', symbol: '💚' },
-    ruby: { name: 'Ruby', color: '#e0115f', rarity: 0.03, value: 150, minPickaxe: 'steel', symbol: '❤️' },
-    diamond: { name: 'Diamond', color: '#b9f2ff', rarity: 0.02, value: 300, minPickaxe: 'steel', symbol: '💎' },
-    sapphire: { name: 'Sapphire', color: '#0f52ba', rarity: 0.015, value: 400, minPickaxe: 'diamond', symbol: '💙' },
-    jade: { name: 'Jade', color: '#00a86b', rarity: 0.008, value: 800, minPickaxe: 'diamond', symbol: '💚' },
-    key: { name: 'Key', color: '#ffd700', rarity: 0.005, value: 0, minPickaxe: 'basic', symbol: '🗝️' }
-  };
-
-  const moonOres = {
-    moonrock: { name: 'Moon Rock', color: '#d3d3d3', rarity: 0.4, value: 100, minPickaxe: 'basic', symbol: '🌑' },
-    stardust: { name: 'Stardust', color: '#e6e6fa', rarity: 0.25, value: 250, minPickaxe: 'iron', symbol: '✨' },
-    meteorite: { name: 'Meteorite', color: '#4a4a4a', rarity: 0.15, value: 500, minPickaxe: 'steel', symbol: '☄️' },
-    cosmicgem: { name: 'Cosmic Gem', color: '#9400d3', rarity: 0.08, value: 1000, minPickaxe: 'diamond', symbol: '🔮' },
-    voidcrystal: { name: 'Void Crystal', color: '#191970', rarity: 0.05, value: 2000, minPickaxe: 'diamond', symbol: '🌌' },
-    nebulite: { name: 'Nebulite', color: '#ff1493', rarity: 0.03, value: 3500, minPickaxe: 'diamond', symbol: '🌠' },
-    quantumore: { name: 'Quantum Ore', color: '#00ffff', rarity: 0.015, value: 5000, minPickaxe: 'diamond', symbol: '⚛️' },
-    key: { name: 'Key', color: '#ffd700', rarity: 0.005, value: 0, minPickaxe: 'basic', symbol: '🗝️' }
-  };
-
-  const currentOres = gameState.currentArea === 'earth' ? earthOres : moonOres;
-
-  const pickaxes = {
-    basic: { name: 'Basic Pickaxe', cost: 0, owned: true },
-    iron: { name: 'Iron Pickaxe', cost: 100, owned: false },
-    steel: { name: 'Steel Pickaxe', cost: 500, owned: false },
-    diamond: { name: 'Diamond Pickaxe', cost: 2000, owned: false }
-  };
-
-  const boosts = {
-    luck1: { name: 'Luck Boost I (+10%)', cost: 50, boost: 0.1 },
-    luck2: { name: 'Luck Boost II (+20%)', cost: 200, boost: 0.2 },
-    luck3: { name: 'Luck Boost III (+35%)', cost: 800, boost: 0.35 }
-  };
-
-  const showNotification = (message) => {
-    setNotification(message);
-    setTimeout(() => setNotification(''), 3000);
-  };
-
-  const spawnOre = useCallback(() => {
-    if (ores.length >= 50) return;
-    
-    const currentLuck = Date.now() < gameState.luckBoostEnd ? gameState.luckBoost : 0;
-    const random = Math.random() * (1 + currentLuck);
-    let cumulativeRarity = 0;
-    
-    for (const [type, ore] of Object.entries(currentOres)) {
-      cumulativeRarity += ore.rarity;
-      if (random <= cumulativeRarity) {
-        const newOre = {
-          id: nextOreId,
-          type,
-          x: Math.random() * 320,
-          y: Math.random() * 350 + 50
-        };
-        setOres(prev => [...prev, newOre]);
-        setNextOreId(prev => prev + 1);
-        break;
-      }
-    }
-  }, [gameState.luckBoost, gameState.luckBoostEnd, nextOreId, ores.length, currentOres]);
-
-  const spawnChest = useCallback(() => {
-    if (chests.length >= 5 || Math.random() > 0.1) return;
-    
-    const newChest = {
-      id: Date.now(),
-      x: Math.random() * 50 + 350,
-      y: Math.random() * 100 + 450
-    };
-    setChests(prev => [...prev, newChest]);
-  }, [chests.length]);
-
-  useEffect(() => {
-    const currentSpeed = Date.now() < gameState.spawnSpeedBoostEnd ? 1000 : 2000;
-    const interval = setInterval(() => {
-      spawnOre();
-      spawnChest();
-    }, currentSpeed);
-    return () => clearInterval(interval);
-  }, [spawnOre, spawnChest, gameState.spawnSpeedBoostEnd]);
-
-  useEffect(() => {
-    if (!gameState.autoCollector) return;
-    
-    const interval = setInterval(() => {
-      setOres(prev => {
-        if (prev.length === 0) return prev;
-        const oreToCollect = prev.find(ore => canMineOre(ore.type));
-        if (oreToCollect) {
-          mineOre(oreToCollect.id, oreToCollect.type, true);
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Adventure RPG</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
         }
-        return prev;
-      });
-    }, gameState.autoCollectorSpeed);
-    return () => clearInterval(interval);
-  }, [gameState.autoCollector, gameState.autoCollectorSpeed]);
-
-  const canMineOre = (oreType) => {
-    const ore = currentOres[oreType];
-    const pickaxeOrder = ['basic', 'iron', 'steel', 'diamond'];
-    const currentPickaxeIndex = pickaxeOrder.indexOf(gameState.pickaxe);
-    const requiredPickaxeIndex = pickaxeOrder.indexOf(ore.minPickaxe);
-    return currentPickaxeIndex >= requiredPickaxeIndex;
-  };
-
-  const mineOre = (oreId, oreType, isAuto = false) => {
-    if (!canMineOre(oreType)) {
-      if (!isAuto) {
-        const requiredPickaxe = currentOres[oreType].minPickaxe;
-        showNotification(`Need ${pickaxes[requiredPickaxe].name} to mine ${currentOres[oreType].name}!`);
-      }
-      return;
-    }
-    
-    setOres(prev => prev.filter(ore => ore.id !== oreId));
-    setGameState(prev => ({
-      ...prev,
-      inventory: {
-        ...prev.inventory,
-        [oreType]: (prev.inventory[oreType] || 0) + 1
-      }
-    }));
-  };
-
-  const openChest = (chestId) => {
-    const keys = gameState.inventory.key || 0;
-    if (keys === 0) {
-      showNotification('Need a key to open chest!');
-      return;
-    }
-    
-    setChests(prev => prev.filter(chest => chest.id !== chestId));
-    
-    const rewards = [
-      () => {
-        const cash = Math.floor(Math.random() * 180) + 20;
-        setGameState(prev => ({ ...prev, money: prev.money + cash }));
-        showNotification(`Found $${cash}!`);
-      },
-      () => {
-        const duration = (Math.floor(Math.random() * 4) + 1) * 60000;
-        const boost = (Math.floor(Math.random() * 4) + 1) * 0.1;
-        setGameState(prev => ({
-          ...prev,
-          luckBoost: boost,
-          luckBoostEnd: Date.now() + duration
-        }));
-        showNotification(`Luck boost: +${(boost * 100).toFixed(0)}% for ${duration / 60000}min!`);
-      },
-      () => {
-        const duration = (Math.floor(Math.random() * 4) + 1) * 60000;
-        const boost = (Math.floor(Math.random() * 4) + 1) * 0.1;
-        setGameState(prev => ({
-          ...prev,
-          spawnSpeedBoost: boost,
-          spawnSpeedBoostEnd: Date.now() + duration
-        }));
-        showNotification(`Spawn speed boost: +${(boost * 100).toFixed(0)}% for ${duration / 60000}min!`);
-      }
-    ];
-    
-    rewards[Math.floor(Math.random() * rewards.length)]();
-    
-    setGameState(prev => ({
-      ...prev,
-      inventory: { ...prev.inventory, key: keys - 1 }
-    }));
-  };
-
-  const sellOre = (oreType) => {
-    const quantity = gameState.inventory[oreType] || 0;
-    if (quantity === 0 || oreType === 'key') return;
-    
-    const value = currentOres[oreType].value * quantity;
-    setGameState(prev => ({
-      ...prev,
-      money: prev.money + value,
-      inventory: {
-        ...prev.inventory,
-        [oreType]: 0
-      }
-    }));
-  };
-
-  const buyPickaxe = (pickaxeType) => {
-    const pickaxe = pickaxes[pickaxeType];
-    if (gameState.money < pickaxe.cost || pickaxe.owned) return;
-    
-    setGameState(prev => ({
-      ...prev,
-      money: prev.money - pickaxe.cost,
-      pickaxe: pickaxeType
-    }));
-    pickaxes[pickaxeType].owned = true;
-  };
-
-  const buyBoost = (boostType) => {
-    const boost = boosts[boostType];
-    if (gameState.money < boost.cost) return;
-    
-    setGameState(prev => ({
-      ...prev,
-      money: prev.money - boost.cost,
-      luckBoost: boost.boost,
-      luckBoostEnd: Date.now() + 300000
-    }));
-  };
-
-  const buyAutoCollector = () => {
-    if (gameState.money < 1000 || gameState.autoCollector) return;
-    setGameState(prev => ({
-      ...prev,
-      money: prev.money - 1000,
-      autoCollector: true
-    }));
-  };
-
-  const upgradeAutoCollector = () => {
-    if (gameState.money < 2000 || gameState.autoCollectorSpeed <= 1000) return;
-    setGameState(prev => ({
-      ...prev,
-      money: prev.money - 2000,
-      autoCollectorSpeed: Math.max(1000, prev.autoCollectorSpeed - 1000)
-    }));
-  };
-
-  const unlockMoon = () => {
-    if (gameState.money < 5000 || gameState.moonUnlocked) return;
-    setGameState(prev => ({
-      ...prev,
-      money: prev.money - 5000,
-      moonUnlocked: true
-    }));
-    showNotification('Moon area unlocked!');
-  };
-
-  const switchArea = (area) => {
-    setGameState(prev => ({ ...prev, currentArea: area }));
-    setOres([]);
-    setChests([]);
-  };
-
-  return (
-    <div className="flex h-screen bg-gray-900 text-white">
-      {/* Mining Area */}
-      <div className="w-1/2 bg-gradient-to-b from-gray-800 to-gray-900 relative border-r-2 border-gray-600">
-        <div className="flex justify-between items-center p-4 bg-gray-700">
-          <h2 className="text-2xl font-bold">{gameState.currentArea === 'earth' ? '🌍 Earth' : '🌙 Moon'} Mining</h2>
-          <div className="flex space-x-2">
-            <button
-              onClick={() => switchArea('earth')}
-              className={`px-3 py-1 rounded ${gameState.currentArea === 'earth' ? 'bg-blue-600' : 'bg-gray-600'}`}
-            >
-              🌍 Earth
-            </button>
-            {gameState.moonUnlocked && (
-              <button
-                onClick={() => switchArea('moon')}
-                className={`px-3 py-1 rounded ${gameState.currentArea === 'moon' ? 'bg-purple-600' : 'bg-gray-600'}`}
-              >
-                🌙 Moon
-              </button>
-            )}
-          </div>
+        
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            z-index: 100;
+            background: rgba(0,0,0,0.7);
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        
+        #shop {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            color: white;
+            z-index: 100;
+            background: rgba(0,0,50,0.8);
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 12px;
+            border: 2px solid #4444ff;
+            max-width: 250px;
+        }
+        
+        .sword-item {
+            margin: 8px 0;
+            padding: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            border: 1px solid #666;
+        }
+        
+        .sword-item.owned {
+            border-color: #44ff44;
+            background: rgba(0,255,0,0.1);
+        }
+        
+        .sword-item.equipped {
+            border-color: #ffff44;
+            background: rgba(255,255,0,0.1);
+        }
+        
+        .buy-btn, .equip-btn {
+            background: #4444ff;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            margin: 2px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 10px;
+        }
+        
+        .buy-btn:hover, .equip-btn:hover {
+            background: #6666ff;
+        }
+        
+        .buy-btn:disabled, .equip-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+        
+        #controls {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            font-size: 12px;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border: 2px solid white;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 50;
+        }
+        
+        .health-bar {
+            position: absolute;
+            width: 50px;
+            height: 6px;
+            background: rgba(255,0,0,0.3);
+            border: 1px solid #fff;
+            transform: translate(-50%, -100%);
+        }
+        
+        .health-fill {
+            height: 100%;
+            background: #ff0000;
+            transition: width 0.3s;
+        }
+        
+        .health-text {
+            position: absolute;
+            color: white;
+            font-size: 10px;
+            text-align: center;
+            width: 50px;
+            transform: translate(-50%, -120%);
+            text-shadow: 1px 1px 1px #000;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="crosshair"></div>
+        <div id="ui">
+            <div>Health: <span id="health">100</span>/<span id="maxHealth">100</span></div>
+            <div>XP: <span id="xp">0</span></div>
+            <div>Level: <span id="level">1</span></div>
+            <div>Coins: <span id="coins">0</span></div>
+            <div>Current Sword: <span id="currentSword">Grey Blade</span></div>
         </div>
         
-        <div className="relative h-full overflow-hidden" style={{
-          background: gameState.currentArea === 'earth' 
-            ? 'linear-gradient(to bottom, #87ceeb 0%, #8fbc8f 40%, #8b4513 100%)'
-            : 'linear-gradient(to bottom, #000000 0%, #191970 50%, #2f2f2f 100%)'
-        }}>
-          {/* Stars for moon */}
-          {gameState.currentArea === 'moon' && (
-            <div className="absolute inset-0">
-              {[...Array(20)].map((_, i) => (
-                <div
-                  key={i}
-                  className="absolute text-white text-xs"
-                  style={{
-                    left: `${Math.random() * 100}%`,
-                    top: `${Math.random() * 50}%`
-                  }}
-                >
-                  ⭐
-                </div>
-              ))}
-            </div>
-          )}
-          
-          {ores.map(ore => (
-            <div
-              key={ore.id}
-              className={`absolute w-10 h-10 flex items-center justify-center cursor-pointer transform hover:scale-110 transition-transform text-2xl ${
-                canMineOre(ore.type) ? '' : 'opacity-50 cursor-not-allowed'
-              }`}
-              style={{
-                left: `${ore.x}px`,
-                top: `${ore.y}px`,
-                filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.5))'
-              }}
-              onClick={() => mineOre(ore.id, ore.type)}
-              title={`${currentOres[ore.type].name}${!canMineOre(ore.type) ? ' (Need better pickaxe!)' : ''}`}
-            >
-              {currentOres[ore.type].symbol}
-            </div>
-          ))}
-          
-          {chests.map(chest => (
-            <div
-              key={chest.id}
-              className="absolute w-12 h-12 flex items-center justify-center cursor-pointer transform hover:scale-110 transition-transform text-3xl"
-              style={{
-                left: `${chest.x}px`,
-                top: `${chest.y}px`,
-                filter: 'drop-shadow(2px 2px 4px rgba(0,0,0,0.5))'
-              }}
-              onClick={() => openChest(chest.id)}
-              title="Treasure Chest (Requires Key)"
-            >
-              📦
-            </div>
-          ))}
+        <div id="shop">
+            <h3>Sword Shop</h3>
+            <div id="swordList"></div>
         </div>
         
-        <div className="absolute bottom-4 left-4 bg-gray-700 p-3 rounded">
-          <div className="text-lg font-semibold">🔨 {pickaxes[gameState.pickaxe].name}</div>
-          <div className="text-sm text-gray-300">💰 ${gameState.money}</div>
-          <div className="text-sm text-gray-300">📦 Ores: {ores.length}/50</div>
-          {Date.now() < gameState.luckBoostEnd && (
-            <div className="text-sm text-green-400">🍀 Luck: +{(gameState.luckBoost * 100).toFixed(0)}%</div>
-          )}
-          {Date.now() < gameState.spawnSpeedBoostEnd && (
-            <div className="text-sm text-blue-400">⚡ Speed Boost Active</div>
-          )}
-          {gameState.autoCollector && (
-            <div className="text-sm text-purple-400">🤖 Auto: {gameState.autoCollectorSpeed/1000}s</div>
-          )}
+        <div id="controls">
+            <div>WASD: Move | Mouse: Look | Click: Attack | Shift: Toggle Shiftlock</div>
+            <div>Red: 100hp | Blue: 250hp | Yellow: 500hp</div>
         </div>
-        
-        {notification && (
-          <div className="absolute top-20 left-1/2 transform -translate-x-1/2 bg-yellow-600 text-black px-4 py-2 rounded font-bold z-10">
-            {notification}
-          </div>
-        )}
-      </div>
-
-      {/* Market & Shop */}
-      <div className="w-1/2 bg-gray-800">
-        <div className="h-1/2 border-b-2 border-gray-600">
-          <h2 className="text-2xl font-bold p-4 bg-gray-700">💰 Sell Ores</h2>
-          <div className="p-4 space-y-2 overflow-y-auto max-h-80">
-            {Object.entries(currentOres).map(([type, ore]) => {
-              if (type === 'key') return null;
-              const quantity = gameState.inventory[type] || 0;
-              return (
-                <div key={type} className="flex justify-between items-center bg-gray-700 p-3 rounded">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-xl">{ore.symbol}</span>
-                    <span>{ore.name} x{quantity}</span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <span className="text-green-400">${ore.value} each</span>
-                    <button
-                      onClick={() => sellOre(type)}
-                      disabled={quantity === 0}
-                      className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 px-3 py-1 rounded text-sm"
-                    >
-                      Sell All (${ore.value * quantity})
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            <div className="bg-gray-700 p-3 rounded">
-              <div className="flex items-center space-x-3">
-                <span className="text-xl">🗝️</span>
-                <span>Keys: {gameState.inventory.key || 0}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="h-1/2">
-          <h2 className="text-2xl font-bold p-4 bg-gray-700">🛒 Shop</h2>
-          <div className="p-4 space-y-3 overflow-y-auto max-h-80">
-            <div className="text-lg font-semibold text-blue-400">🔨 Pickaxes</div>
-            {Object.entries(pickaxes).map(([type, pickaxe]) => (
-              <div key={type} className="flex justify-between items-center bg-gray-700 p-3 rounded">
-                <span className={pickaxe.owned ? 'text-green-400' : ''}>{pickaxe.name}</span>
-                <button
-                  onClick={() => buyPickaxe(type)}
-                  disabled={gameState.money < pickaxe.cost || pickaxe.owned}
-                  className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 px-3 py-1 rounded text-sm"
-                >
-                  {pickaxe.owned ? 'Owned' : `$${pickaxe.cost}`}
-                </button>
-              </div>
-            ))}
-            
-            <div className="text-lg font-semibold text-purple-400 mt-4">🚀 Upgrades</div>
-            <div className="flex justify-between items-center bg-gray-700 p-3 rounded">
-              <span className={gameState.autoCollector ? 'text-green-400' : ''}>🤖 Auto Collector</span>
-              <button
-                onClick={buyAutoCollector}
-                disabled={gameState.money < 1000 || gameState.autoCollector}
-                className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 px-3 py-1 rounded text-sm"
-              >
-                {gameState.autoCollector ? 'Owned' : '$1000'}
-              </button>
-            </div>
-            {gameState.autoCollector && gameState.autoCollectorSpeed > 1000 && (
-              <div className="flex justify-between items-center bg-gray-700 p-3 rounded">
-                <span>⚡ Upgrade Auto Collector</span>
-                <button
-                  onClick={upgradeAutoCollector}
-                  disabled={gameState.money < 2000}
-                  className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 px-3 py-1 rounded text-sm"
-                >
-                  $2000
-                </button>
-              </div>
-            )}
-            {!gameState.moonUnlocked && (
-              <div className="flex justify-between items-center bg-gray-700 p-3 rounded">
-                <span>🌙 Unlock Moon Area</span>
-                <button
-                  onClick={unlockMoon}
-                  disabled={gameState.money < 5000}
-                  className="bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-600 px-3 py-1 rounded text-sm"
-                >
-                  $5000
-                </button>
-              </div>
-            )}
-            
-            {Object.entries(boosts).map(([type, boost]) => (
-              <div key={type} className="flex justify-between items-center bg-gray-700 p-3 rounded">
-                <span>🍀 {boost.name} (5min)</span>
-                <button
-                  onClick={() => buyBoost(type)}
-                  disabled={gameState.money < boost.cost}
-                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 px-3 py-1 rounded text-sm"
-                >
-                  ${boost.cost}
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
     </div>
-  );
-};
 
-export default OreMiningGame;
+    <script>
+        // Game state
+        const gameState = {
+            health: 100,
+            maxHealth: 100,
+            xp: 0,
+            level: 1,
+            coins: 0,
+            currentSword: 'grey',
+            ownedSwords: ['grey'],
+            isAttacking: false,
+            attackCooldown: 0,
+            shiftLocked: false,
+            swordSwingAnimation: 0
+        };
+
+        // Sword definitions
+        const swords = {
+            grey: { name: 'Grey Blade', damage: 20, cooldown: 60, cost: 0, color: 0x888888 },
+            black: { name: 'Black Blade', damage: 5, cooldown: 12, cost: 40, color: 0x222222 },
+            red: { name: 'Red Blade', damage: 50, cooldown: 90, cost: 150, color: 0xff2222 },
+            golden: { name: 'Golden Blade', damage: 10, cooldown: 6, cost: 500, color: 0xffdd00 }
+        };
+
+        // Enemy definitions
+        const enemyTypes = {
+            red: { health: 100, speed: 0.015, damage: 10, attackInterval: 60, coinDrop: [5,10], xpDrop: 10, color: 0xff0000 },
+            blue: { health: 250, speed: 0.018, damage: 4, attackInterval: 15, coinDrop: [15,20], xpDrop: 20, color: 0x0066ff },
+            yellow: { health: 500, speed: 0.0225, damage: 50, attackInterval: 120, coinDrop: [35,40], xpDrop: 40, color: 0xffff00 }
+        };
+
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x87CEEB);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.getElementById('gameContainer').appendChild(renderer.domElement);
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(50, 50, 50);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        directionalLight.shadow.camera.left = -100;
+        directionalLight.shadow.camera.right = 100;
+        directionalLight.shadow.camera.top = 100;
+        directionalLight.shadow.camera.bottom = -100;
+        scene.add(directionalLight);
+
+        // Ground
+        const groundGeometry = new THREE.PlaneGeometry(200, 200);
+        const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Create landscape decorations
+        function createLandscape() {
+            // Trees
+            for (let i = 0; i < 25; i++) {
+                const x = (Math.random() - 0.5) * 160;
+                const z = (Math.random() - 0.5) * 160;
+                
+                // Tree trunk
+                const trunkGeometry = new THREE.CylinderGeometry(0.3, 0.4, 4, 8);
+                const trunkMaterial = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+                const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+                trunk.position.set(x, 2, z);
+                trunk.castShadow = true;
+                scene.add(trunk);
+                
+                // Tree leaves
+                const leavesGeometry = new THREE.SphereGeometry(2, 8, 6);
+                const leavesMaterial = new THREE.MeshLambertMaterial({ color: 0x228B22 });
+                const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
+                leaves.position.set(x, 5, z);
+                leaves.castShadow = true;
+                scene.add(leaves);
+            }
+            
+            // Bushes
+            for (let i = 0; i < 40; i++) {
+                const x = (Math.random() - 0.5) * 180;
+                const z = (Math.random() - 0.5) * 180;
+                
+                const bushGeometry = new THREE.SphereGeometry(0.8, 8, 6);
+                const bushMaterial = new THREE.MeshLambertMaterial({ color: 0x006400 });
+                const bush = new THREE.Mesh(bushGeometry, bushMaterial);
+                bush.position.set(x, 0.8, z);
+                bush.scale.y = 0.6;
+                bush.castShadow = true;
+                scene.add(bush);
+            }
+            
+            // Small hills
+            for (let i = 0; i < 15; i++) {
+                const x = (Math.random() - 0.5) * 150;
+                const z = (Math.random() - 0.5) * 150;
+                
+                const hillGeometry = new THREE.SphereGeometry(8, 16, 8);
+                const hillMaterial = new THREE.MeshLambertMaterial({ color: 0x32CD32 });
+                const hill = new THREE.Mesh(hillGeometry, hillMaterial);
+                hill.position.set(x, -4, z);
+                hill.scale.y = 0.3;
+                hill.receiveShadow = true;
+                scene.add(hill);
+            }
+            
+            // Border rocks
+            const rockPositions = [];
+            for (let angle = 0; angle < Math.PI * 2; angle += 0.3) {
+                const distance = 95 + Math.random() * 10;
+                const x = Math.cos(angle) * distance;
+                const z = Math.sin(angle) * distance;
+                rockPositions.push({ x, z });
+            }
+            
+            rockPositions.forEach(pos => {
+                const rockGeometry = new THREE.DodecahedronGeometry(2 + Math.random() * 2, 0);
+                const rockMaterial = new THREE.MeshLambertMaterial({ color: 0x696969 });
+                const rock = new THREE.Mesh(rockGeometry, rockMaterial);
+                rock.position.set(pos.x, 1, pos.z);
+                rock.rotation.x = Math.random() * Math.PI;
+                rock.rotation.z = Math.random() * Math.PI;
+                rock.castShadow = true;
+                scene.add(rock);
+            });
+            
+            // Add clouds to the sky
+            for (let i = 0; i < 20; i++) {
+                const cloudGroup = new THREE.Group();
+                
+                // Create cloud parts (multiple spheres)
+                for (let j = 0; j < 5; j++) {
+                    const cloudGeometry = new THREE.SphereGeometry(2 + Math.random() * 3, 8, 6);
+                    const cloudMaterial = new THREE.MeshLambertMaterial({ 
+                        color: 0xffffff, 
+                        transparent: true, 
+                        opacity: 0.8 
+                    });
+                    const cloudPart = new THREE.Mesh(cloudGeometry, cloudMaterial);
+                    cloudPart.position.set(
+                        (Math.random() - 0.5) * 8,
+                        Math.random() * 2,
+                        (Math.random() - 0.5) * 8
+                    );
+                    cloudGroup.add(cloudPart);
+                }
+                
+                cloudGroup.position.set(
+                    (Math.random() - 0.5) * 300,
+                    30 + Math.random() * 20,
+                    (Math.random() - 0.5) * 300
+                );
+                
+                scene.add(cloudGroup);
+            }
+        }
+
+        // Player
+        const playerGeometry = new THREE.SphereGeometry(0.5, 8, 6);
+        const playerMaterial = new THREE.MeshLambertMaterial({ color: 0x0066ff });
+        const player = new THREE.Mesh(playerGeometry, playerMaterial);
+        player.position.y = 0.5;
+        player.castShadow = true;
+        scene.add(player);
+
+        // Create sword in hand
+        let currentSwordMesh = null;
+        function createSword(swordType) {
+            if (currentSwordMesh) {
+                camera.remove(currentSwordMesh);
+            }
+            
+            const swordGroup = new THREE.Group();
+            
+            // Handle
+            const handleGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.8, 8);
+            const handleMaterial = new THREE.MeshLambertMaterial({ color: 0x654321 });
+            const handle = new THREE.Mesh(handleGeometry, handleMaterial);
+            handle.position.y = -0.4;
+            swordGroup.add(handle);
+            
+            // Cross guard
+            const crossGeometry = new THREE.BoxGeometry(0.6, 0.05, 0.05);
+            const crossMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+            const cross = new THREE.Mesh(crossGeometry, crossMaterial);
+            swordGroup.add(cross);
+            
+            // Blade
+            const bladeGeometry = new THREE.BoxGeometry(0.05, 1.5, 0.2);
+            const bladeMaterial = new THREE.MeshLambertMaterial({ color: swords[swordType].color });
+            const blade = new THREE.Mesh(bladeGeometry, bladeMaterial);
+            blade.position.y = 0.75;
+            swordGroup.add(blade);
+            
+            swordGroup.position.set(0.3, -0.5, -0.8);
+            swordGroup.rotation.z = Math.PI / 6;
+            
+            camera.add(swordGroup);
+            currentSwordMesh = swordGroup;
+        }
+
+        // Camera setup (first person)
+        camera.position.set(0, 1.7, 0);
+        player.add(camera);
+
+        // Game objects arrays
+        const enemies = [];
+        const items = [];
+
+        // Controls
+        const keys = {};
+        let mouseX = 0, mouseY = 0;
+
+        // Event listeners
+        document.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+                if (!gameState.shiftLocked) {
+                    gameState.shiftLocked = true;
+                    renderer.domElement.requestPointerLock();
+                }
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            keys[e.code] = false;
+            if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+                if (gameState.shiftLocked) {
+                    gameState.shiftLocked = false;
+                    document.exitPointerLock();
+                }
+            }
+        });
+        
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement || gameState.shiftLocked) {
+                player.rotation.y -= e.movementX * 0.002;
+                camera.rotation.x -= e.movementY * 0.002;
+                camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
+            }
+        });
+
+        // Pointer lock and attack handling
+        renderer.domElement.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (document.pointerLockElement === renderer.domElement || gameState.shiftLocked) {
+                attack();
+            } else if (!gameState.shiftLocked) {
+                renderer.domElement.requestPointerLock();
+            }
+        });
+        
+        document.addEventListener('click', (e) => {
+            if (document.pointerLockElement === renderer.domElement || gameState.shiftLocked) {
+                attack();
+            }
+        });
+
+        // Enemy class
+        class Enemy {
+            constructor(x, z, type) {
+                this.type = type;
+                this.stats = enemyTypes[type];
+                
+                // Create humanoid shape
+                this.group = new THREE.Group();
+                
+                // Body
+                const bodyGeometry = new THREE.BoxGeometry(0.8, 1.2, 0.4);
+                const bodyMaterial = new THREE.MeshLambertMaterial({ color: this.stats.color });
+                const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                body.position.y = 0.6;
+                this.group.add(body);
+                
+                // Head
+                const headGeometry = new THREE.SphereGeometry(0.3, 8, 6);
+                const head = new THREE.Mesh(headGeometry, bodyMaterial);
+                head.position.y = 1.5;
+                this.group.add(head);
+                
+                // Arms
+                const armGeometry = new THREE.BoxGeometry(0.2, 0.8, 0.2);
+                const leftArm = new THREE.Mesh(armGeometry, bodyMaterial);
+                leftArm.position.set(-0.6, 0.4, 0);
+                this.group.add(leftArm);
+                
+                const rightArm = new THREE.Mesh(armGeometry, bodyMaterial);
+                rightArm.position.set(0.6, 0.4, 0);
+                this.group.add(rightArm);
+                
+                // Legs
+                const legGeometry = new THREE.BoxGeometry(0.25, 0.8, 0.25);
+                const leftLeg = new THREE.Mesh(legGeometry, bodyMaterial);
+                leftLeg.position.set(-0.2, -0.4, 0);
+                this.group.add(leftLeg);
+                
+                const rightLeg = new THREE.Mesh(legGeometry, bodyMaterial);
+                rightLeg.position.set(0.2, -0.4, 0);
+                this.group.add(rightLeg);
+                
+                this.group.position.set(x, 0.4, z);
+                this.group.castShadow = true;
+                scene.add(this.group);
+                
+                this.health = this.stats.health;
+                this.maxHealth = this.stats.health;
+                this.attackCooldown = 0;
+                
+                // Create health bar
+                this.createHealthBar();
+            }
+            
+            createHealthBar() {
+                // Health bar container
+                const barContainer = document.createElement('div');
+                barContainer.className = 'health-bar';
+                barContainer.style.position = 'absolute';
+                
+                // Health fill
+                const healthFill = document.createElement('div');
+                healthFill.className = 'health-fill';
+                healthFill.style.width = '100%';
+                
+                // Health text
+                const healthText = document.createElement('div');
+                healthText.className = 'health-text';
+                healthText.textContent = `${this.health}/${this.maxHealth}`;
+                
+                barContainer.appendChild(healthFill);
+                document.body.appendChild(barContainer);
+                document.body.appendChild(healthText);
+                
+                this.healthBar = barContainer;
+                this.healthFill = healthFill;
+                this.healthText = healthText;
+            }
+            
+            updateHealthBar() {
+                const screenPos = this.getScreenPosition();
+                if (screenPos) {
+                    this.healthBar.style.left = screenPos.x + 'px';
+                    this.healthBar.style.top = (screenPos.y - 30) + 'px';
+                    this.healthBar.style.display = 'block';
+                    
+                    this.healthText.style.left = screenPos.x + 'px';
+                    this.healthText.style.top = (screenPos.y - 45) + 'px';
+                    this.healthText.style.display = 'block';
+                    
+                    const healthPercent = (this.health / this.maxHealth) * 100;
+                    this.healthFill.style.width = healthPercent + '%';
+                    this.healthText.textContent = `${this.health}/${this.maxHealth}`;
+                } else {
+                    this.healthBar.style.display = 'none';
+                    this.healthText.style.display = 'none';
+                }
+            }
+            
+            getScreenPosition() {
+                const vector = new THREE.Vector3();
+                this.group.getWorldPosition(vector);
+                vector.y += 1;
+                vector.project(camera);
+                
+                if (vector.z > 1) return null;
+                
+                const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+                const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
+                
+                return { x, y };
+            }
+
+            update() {
+                // Move towards player
+                const direction = new THREE.Vector3();
+                direction.subVectors(player.position, this.group.position);
+                direction.y = 0;
+                direction.normalize();
+                
+                this.group.position.add(direction.multiplyScalar(this.stats.speed));
+                
+                // Attack player if close
+                const distance = this.group.position.distanceTo(player.position);
+                if (distance < 2 && this.attackCooldown <= 0) {
+                    this.attackPlayer();
+                    this.attackCooldown = this.stats.attackInterval;
+                }
+                
+                if (this.attackCooldown > 0) this.attackCooldown--;
+                
+                this.updateHealthBar();
+            }
+
+            attackPlayer() {
+                gameState.health = Math.max(0, gameState.health - this.stats.damage);
+                updateUI();
+            }
+
+            takeDamage(damage) {
+                this.health -= damage;
+                if (this.health <= 0) {
+                    this.die();
+                }
+            }
+
+            die() {
+                scene.remove(this.group);
+                
+                // Remove health bar elements
+                if (this.healthBar) this.healthBar.remove();
+                if (this.healthText) this.healthText.remove();
+                
+                const index = enemies.indexOf(this);
+                if (index > -1) enemies.splice(index, 1);
+                
+                // Drop items
+                this.dropItems();
+                
+                // Give XP
+                gameState.xp += this.stats.xpDrop;
+                const xpNeeded = gameState.level * 100;
+                if (gameState.xp >= xpNeeded) {
+                    gameState.level++;
+                    gameState.maxHealth += 10;
+                    gameState.health = gameState.maxHealth;
+                }
+                updateUI();
+            }
+
+            dropItems() {
+                const x = this.group.position.x;
+                const z = this.group.position.z;
+                
+                // Drop coins
+                const coinAmount = Math.floor(Math.random() * (this.stats.coinDrop[1] - this.stats.coinDrop[0] + 1)) + this.stats.coinDrop[0];
+                for (let i = 0; i < coinAmount; i++) {
+                    createItem(x + (Math.random() - 0.5) * 2, z + (Math.random() - 0.5) * 2, 'coin');
+                }
+            }
+        }
+
+        // Item creation
+        function createItem(x, z, type) {
+            const item = {
+                type: type,
+                mesh: null,
+                rotationSpeed: 0.02,
+                value: type === 'coin' ? 1 : 0
+            };
+
+            let geometry, material, color;
+            
+            if (type === 'coin') {
+                geometry = new THREE.CylinderGeometry(0.3, 0.3, 0.1, 8);
+                color = 0xffdd00;
+            }
+            
+            material = new THREE.MeshLambertMaterial({ color: color });
+            item.mesh = new THREE.Mesh(geometry, material);
+            item.mesh.position.set(x, 0.5, z);
+            item.mesh.castShadow = true;
+            
+            scene.add(item.mesh);
+            items.push(item);
+        }
+
+        // Attack function
+        function attack() {
+            if (gameState.attackCooldown > 0) return;
+            
+            const currentSwordData = swords[gameState.currentSword];
+            gameState.attackCooldown = currentSwordData.cooldown;
+            gameState.swordSwingAnimation = 20; // Animation frames
+
+            // Raycast to find enemies
+            const raycaster = new THREE.Raycaster();
+            const direction = new THREE.Vector3(0, 0, -1);
+            direction.applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+            
+            raycaster.set(camera.getWorldPosition(new THREE.Vector3()), direction);
+            
+            for (let enemy of enemies) {
+                const intersects = raycaster.intersectObject(enemy.group, true);
+                if (intersects.length > 0 && intersects[0].distance < 5) {
+                    enemy.takeDamage(currentSwordData.damage);
+                    break;
+                }
+            }
+        }
+
+        // Spawn enemies
+        function spawnEnemy() {
+            const angle = Math.random() * Math.PI * 2;
+            const distance = 15 + Math.random() * 30;
+            const x = Math.cos(angle) * distance;
+            const z = Math.sin(angle) * distance;
+            
+            const types = ['red', 'blue', 'yellow'];
+            const weights = [60, 30, 10]; // Red most common, yellow rarest
+            
+            let totalWeight = weights.reduce((a, b) => a + b, 0);
+            let random = Math.random() * totalWeight;
+            let selectedType = types[0];
+            
+            for (let i = 0; i < types.length; i++) {
+                if (random < weights[i]) {
+                    selectedType = types[i];
+                    break;
+                }
+                random -= weights[i];
+            }
+            
+            enemies.push(new Enemy(x, z, selectedType));
+        }
+
+        // Collect items
+        function checkItemCollection() {
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                const distance = item.mesh.position.distanceTo(player.position);
+                
+                if (distance < 1.5) {
+                    if (item.type === 'coin') {
+                        gameState.coins += item.value;
+                    }
+                    
+                    scene.remove(item.mesh);
+                    items.splice(i, 1);
+                    updateUI();
+                }
+            }
+        }
+
+        // Update UI
+        function updateUI() {
+            document.getElementById('health').textContent = gameState.health;
+            document.getElementById('maxHealth').textContent = gameState.maxHealth;
+            document.getElementById('xp').textContent = gameState.xp;
+            document.getElementById('level').textContent = gameState.level;
+            document.getElementById('coins').textContent = gameState.coins;
+            document.getElementById('currentSword').textContent = swords[gameState.currentSword].name;
+            
+            updateSwordShop();
+        }
+
+        // Update sword shop
+        function updateSwordShop() {
+            const shopList = document.getElementById('swordList');
+            shopList.innerHTML = '';
+            
+            for (let [key, sword] of Object.entries(swords)) {
+                const swordDiv = document.createElement('div');
+                swordDiv.className = 'sword-item';
+                
+                const owned = gameState.ownedSwords.includes(key);
+                const equipped = gameState.currentSword === key;
+                
+                if (owned) swordDiv.classList.add('owned');
+                if (equipped) swordDiv.classList.add('equipped');
+                
+                swordDiv.innerHTML = `
+                    <div><strong>${sword.name}</strong></div>
+                    <div>Damage: ${sword.damage} | Cooldown: ${(sword.cooldown/60).toFixed(1)}s</div>
+                    <div>Cost: ${sword.cost} coins</div>
+                `;
+                
+                if (!owned && gameState.coins >= sword.cost) {
+                    const buyBtn = document.createElement('button');
+                    buyBtn.className = 'buy-btn';
+                    buyBtn.textContent = 'Buy';
+                    buyBtn.onclick = () => buySword(key);
+                    swordDiv.appendChild(buyBtn);
+                } else if (owned && !equipped) {
+                    const equipBtn = document.createElement('button');
+                    equipBtn.className = 'equip-btn';
+                    equipBtn.textContent = 'Equip';
+                    equipBtn.onclick = () => equipSword(key);
+                    swordDiv.appendChild(equipBtn);
+                } else if (equipped) {
+                    const equippedText = document.createElement('span');
+                    equippedText.textContent = ' [EQUIPPED]';
+                    equippedText.style.color = '#ffff44';
+                    swordDiv.appendChild(equippedText);
+                }
+                
+                shopList.appendChild(swordDiv);
+            }
+        }
+
+        function buySword(swordKey) {
+            const sword = swords[swordKey];
+            if (gameState.coins >= sword.cost && !gameState.ownedSwords.includes(swordKey)) {
+                gameState.coins -= sword.cost;
+                gameState.ownedSwords.push(swordKey);
+                updateUI();
+            }
+        }
+
+        function equipSword(swordKey) {
+            if (gameState.ownedSwords.includes(swordKey)) {
+                gameState.currentSword = swordKey;
+                createSword(swordKey);
+                updateUI();
+            }
+        }
+
+        // Movement
+        function updateMovement() {
+            const moveSpeed = 0.1;
+            const direction = new THREE.Vector3();
+            
+            if (keys['KeyW']) direction.z -= 1;
+            if (keys['KeyS']) direction.z += 1;
+            if (keys['KeyA']) direction.x -= 1;
+            if (keys['KeyD']) direction.x += 1;
+            
+            if (direction.length() > 0) {
+                direction.normalize();
+                direction.applyQuaternion(player.quaternion);
+                player.position.add(direction.multiplyScalar(moveSpeed));
+                
+                // Keep player on ground and within bounds
+                player.position.y = 0.5;
+                player.position.x = Math.max(-90, Math.min(90, player.position.x));
+                player.position.z = Math.max(-90, Math.min(90, player.position.z));
+            }
+        }
+
+        // Game loop
+        let enemySpawnTimer = 0;
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            updateMovement();
+            
+            // Update attack cooldown
+            if (gameState.attackCooldown > 0) gameState.attackCooldown--;
+            
+            // Update sword swing animation
+            if (gameState.swordSwingAnimation > 0) {
+                gameState.swordSwingAnimation--;
+                if (currentSwordMesh) {
+                    // Create swinging motion
+                    const swingProgress = (20 - gameState.swordSwingAnimation) / 20;
+                    const swingAngle = Math.sin(swingProgress * Math.PI) * 0.8;
+                    currentSwordMesh.rotation.x = swingAngle;
+                    currentSwordMesh.rotation.y = swingAngle * 0.3;
+                }
+            } else if (currentSwordMesh) {
+                // Reset sword position
+                currentSwordMesh.rotation.x = 0;
+                currentSwordMesh.rotation.y = 0;
+            }
+            
+            // Update enemies
+            enemies.forEach(enemy => enemy.update());
+            
+            // Rotate items
+            items.forEach(item => {
+                item.mesh.rotation.y += item.rotationSpeed;
+                item.mesh.position.y = 0.5 + Math.sin(Date.now() * 0.003) * 0.1;
+            });
+            
+            // Check item collection
+            checkItemCollection();
+            
+            // Spawn enemies
+            enemySpawnTimer++;
+            if (enemySpawnTimer > 180 && enemies.length < 8) {
+                spawnEnemy();
+                enemySpawnTimer = 0;
+            }
+            
+            // Check game over
+            if (gameState.health <= 0) {
+                alert('Game Over! You reached level ' + gameState.level + ' with ' + gameState.coins + ' coins!');
+                location.reload();
+            }
+            
+            renderer.render(scene, camera);
+        }
+
+        // Initial setup
+        createLandscape();
+        createSword('grey');
+        updateUI();
+        
+        // Spawn some initial enemies
+        for (let i = 0; i < 3; i++) {
+            setTimeout(() => spawnEnemy(), i * 1000);
+        }
+        
+        animate();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
